@@ -1,4 +1,5 @@
-import { MacaroonsBuilder, MacaroonsVerifier, verifier as libVerifier } from "macaroons.js";
+import { Macaroon, MacaroonsBuilder, MacaroonsVerifier } from "macaroons.js";
+let TimestampCaveatVerifier = require('macaroons.js').verifier.TimestampCaveatVerifier;
 
 
 // Lets create a simple macaroon
@@ -27,10 +28,10 @@ console.log(macaroon.inspect());
 
 // Verifying Your Macaroon
 macaroon = MacaroonsBuilder.create(location, secretKey, identifier);
-let verifier = new MacaroonsVerifier(macaroon);
+let localVerifier = new MacaroonsVerifier(macaroon);
 
 let secret = "this is our super secret key; only we should know it";
-let valid = verifier.isValid(secret);
+let valid = localVerifier.isValid(secret);
 console.log("This macaroon secret is " + (valid ? "valid" : "invalid"));
 
 
@@ -50,27 +51,27 @@ console.log(macaroon.inspect());
 
 
 // Verifying Macaroons With Caveats
-verifier = new MacaroonsVerifier(macaroon);
-console.log("This macaroon secret is " + (verifier.isValid(secret) ? "valid" : "invalid"))
+localVerifier = new MacaroonsVerifier(macaroon);
+console.log("This macaroon secret is " + (localVerifier.isValid(secret) ? "valid" : "invalid"))
 
-verifier.satisfyExact("account = 2345678");
-console.log("After verify a caveat, this macaroon is " + (verifier.isValid(secret) ? "valid" : "invalid"))
+localVerifier.satisfyExact("account = 2345678");
+console.log("After verify a caveat, this macaroon is " + (localVerifier.isValid(secret) ? "valid" : "invalid"))
 
 
-verifier.satisfyExact("IP = 127.0.0.1");
-verifier.satisfyExact("browser = Chrome')");
-console.log("After adding more facts, this macaroon is " + (verifier.isValid(secret) ? "valid" : "invalid"))
+localVerifier.satisfyExact("IP = 127.0.0.1");
+localVerifier.satisfyExact("browser = Chrome')");
+console.log("After adding more facts, this macaroon is " + (localVerifier.isValid(secret) ? "valid" : "invalid"))
 
 
 // There is also a more general way to check caveats, via callbacks. When providing such a callback to the verifier, it is able to check if the caveat satisfies special constrains.
 macaroon = new MacaroonsBuilder(location, secretKey, identifier)
     .add_first_party_caveat("time < 2042-01-01T00:00")
     .getMacaroon();
-verifier = new MacaroonsVerifier(macaroon);
-console.log("This timestamp macaroon is " + (verifier.isValid(secretKey) ? "valid" : "invalid"))
+localVerifier = new MacaroonsVerifier(macaroon);
+console.log("This timestamp macaroon is " + (localVerifier.isValid(secretKey) ? "valid" : "invalid"))
 
-verifier.satisfyGeneral(libVerifier.TimestampCaveatVerifier);
-console.log("After verify timestamp, this macaroon is " + (verifier.isValid(secretKey) ? "valid" : "invalid"))
+localVerifier.satisfyGeneral(TimestampCaveatVerifier);
+console.log("After verify timestamp, this macaroon is " + (localVerifier.isValid(secretKey) ? "valid" : "invalid"))
 
 
 
@@ -93,3 +94,22 @@ let m = mb.add_third_party_caveat("http://auth.mybank/", caveat_key, identifier)
     .getMacaroon();
 
 console.log(`\nAdd a 3rs party caveat\n${m.inspect()}`);
+
+
+
+// This new macaroon enables the verifier to determine that the third party caveat is satisfied. Our target service added a time-limiting caveat to this macaroon that ensures that this discharge macaroon does not last forever. 
+let d: Macaroon = new MacaroonsBuilder("http://auth.mybank/", caveat_key, identifier)
+    .add_first_party_caveat("time < 2015-01-01T00:00")
+    .getMacaroon();
+// The root macaroon is used to bind the discharge macaroons like this
+let dp: Macaroon = MacaroonsBuilder.modify(m)
+    .prepare_for_request(d)
+    .getMacaroon();
+
+let is3rdValid =
+    new MacaroonsVerifier(m)
+        .satisfyExact("account = 3735928559")
+        .satisfyGeneral(new TimestampCaveatVerifier("time < 2015-01-01T00:00"))
+        .satisfy3rdParty(dp)
+        .assertIsValid(secret);
+console.log(`Third macarron validation: ${is3rdValid}`);

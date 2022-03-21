@@ -1,10 +1,12 @@
-# Testing the macarron.js
+# Testing the macaroon
+
+JavaScript example using the (macaroon)[https://www.npmjs.com/package/macaroon] package.
 
 Updating the project
 `npm install`
 
 Running the example
-`ts-node ./lib/macarron-example.ts`
+`npm run example`
 
 Running the API
 `npm run dev`
